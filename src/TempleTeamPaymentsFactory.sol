@@ -1,110 +1,112 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./TempleTeamPayments.sol";
-import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
-
-contract MerkleProofTempleTeamPayments is Ownable {
-
-    IERC20 public immutable TEMPLE;
-
-    mapping(address => uint256) public allocation;
-    mapping(address => uint256) public claimed;
-    // event Claimed(address indexed member, uint256 amount);
-    bytes32[] hashes;
-    // bytes32[] claimedHashes;
-    mapping(bytes32 => bool) claimedHashes;
-    mapping(bytes32 => bool) pausedHashes;
-
-    // uint256 public immutable roundStartDate;
-    // uint256 public immutable roundEndDate;
-    constructor(IERC20 temple, uint256 paymentPeriodInSeconds, uint256 startTimestamp) TempleTeamPayments(temple, paymentPeriodInSeconds, startTimestamp) {
-        // owner = msg.sender;
-        // hashes = _hashes;
-    }
-
-    // function proofClaim(bytes32 _senderProof) external {
-    //     require(!claimedHashes[_senderProof] && !pausedHashes[_senderProof]);
-
-
-    
-    //     claimedHashes[_senderProof] = true;
-        
-    // } 
-
-    // function getRoot() public view returns (bytes32) {
-    //     return hashes[hashes.length - 1];
-    // }
-
-    function setAllocations(
-        address[] memory _addresses,
-        uint256[] memory _amounts
-    ) external onlyOwner {
-        require(
-            _addresses.length == _amounts.length,
-            "TempleTeamPayments: addresses and amounts must be the same length"
-        );
-        address addressZero = address(0);
-        for (uint256 i = 0; i < _addresses.length; i++) {
-            require(_addresses[i] != addressZero, "TempleTeamPayments: Address cannot be 0x0");
-            allocation[_addresses[i]] = _amounts[i];
-        }
-    }
-
-    function setAllocation(address _address, uint256 _amount) external onlyOwner {
-        require(_address != address(0), "TempleTeamPayments: Address cannot be 0x0");
-        allocation[_address] = _amount;
-    }
-
-    function withdrawToken(IERC20 _token, uint256 _amount)
-        external
-        onlyOwner
-    {
-        require(_amount > 0, "TempleTeamPayments: Amount must be greater than 0");
-        SafeERC20.safeTransfer(_token, owner, _amount);
-    }
-
-        function toggleCanClaim(bytes32 _senderProof)
-        external
-        onlyOwner
-    {
-        pausedHashes[_senderProof] = !pausedHashes[_senderProof];
-    }
-
-
-}
 
 contract TempleTeamPaymentsFactory is Ownable {
-
     struct FundingData {
         address paymentContract;
         uint256 totalFunding;
         uint256 epoch;
     }
-    mapping (uint256 => FundingData) roundsFunded;
 
-    function deploy(IERC20 temple, uint256 epoch, bytes32[] calldata hashes, uint256 totalFunding, uint256 paymentPeriodInSeconds, uint256 startTimestamp) external onlyOwner {
+    uint256 public lastPaidEpoch;
+    mapping(uint256 => FundingData) public epochsFunded;
 
-        TempleTeamPayments payment =  new MerkleProofTempleTeamPayments(temple, paymentPeriodInSeconds, startTimestamp);
-        
-        // fundingToken must be approved by caller. 
-        // the paymentContract can be topped up by sending tokens directly to it
-        temple.transferFrom(msg.sender, address(payment), totalFunding);
+    event FundingPaid(
+        address paymentToken,
+        uint256 indexed fundingRound,
+        address[] indexed dests,
+        uint256[] indexed amounts
+    );
+    event FundingDeployed(
+        address paymentToken,
+        uint256 indexed fundingRound,
+        address[] indexed dests,
+        uint256[] indexed amounts,
+        address deployedTo
+    );
 
-        roundsFunded[epoch] = FundingData({
-            paymentContract: address(payment),
-            totalFunding: totalFunding,
-            epoch: epoch
-        });
+    constructor(uint256 _lastPaidEpoch) {
+        lastPaidEpoch = _lastPaidEpoch;
     }
 
-    function withdrawToken(IERC20 _token, uint256 _amount)
-        external
-        onlyOwner
-    {
-        require(_amount > 0, "TempleTeamPayments: Amount must be greater than 0");
-        SafeERC20.safeTransfer(_token, owner, _amount);
+    function deployPayouts(
+        IERC20 _temple,
+        address[] memory _dests,
+        uint256[] memory _allocations,
+        uint256 _totalFunding,
+        uint256 _startTimestamp
+    ) external onlyOwner returns (TempleTeamPayments) {
+        require(
+            _dests.length == _allocations.length,
+            "TempleTeamPaymentsFactory: mismatch length dests + allos"
+        );
+
+        TempleTeamPayments paymentContract = new TempleTeamPayments(
+            _temple,
+            _startTimestamp
+        );
+        paymentContract.setAllocations(_dests, _allocations);
+        paymentContract.transferOwnership(msg.sender);
+        _temple.transferFrom(
+            msg.sender,
+            address(paymentContract),
+            _totalFunding
+        );
+
+        lastPaidEpoch++;
+        epochsFunded[lastPaidEpoch] = FundingData({
+            paymentContract: address(paymentContract),
+            totalFunding: _totalFunding,
+            epoch: lastPaidEpoch
+        });
+
+        emit FundingDeployed(
+            address(_temple),
+            lastPaidEpoch,
+            _dests,
+            _allocations,
+            address(paymentContract)
+        );
+
+        return paymentContract;
+    }
+
+    function directPayouts(
+        IERC20 _temple,
+        address[] memory _dests,
+        uint256[] memory _allocations
+    ) external onlyOwner {
+        require(
+            _dests.length == _allocations.length,
+            "TempleTeamPaymentsFactory: mismatch length dest + allos"
+        );
+
+        uint256 totalFunding;
+        for (uint256 i; i < _dests.length; i++) {
+            uint256 value = _allocations[i];
+            _temple.transferFrom(msg.sender, _dests[i], value);
+            totalFunding += value;
+        }
+
+        lastPaidEpoch++;
+        epochsFunded[lastPaidEpoch] = FundingData({
+            paymentContract: address(this),
+            totalFunding: totalFunding,
+            epoch: lastPaidEpoch
+        });
+
+        emit FundingPaid(address(_temple), lastPaidEpoch, _dests, _allocations);
+    }
+
+    function withdrawToken(IERC20 _token, uint256 _amount) external onlyOwner {
+        require(
+            _amount > 0,
+            "TempleTeamPaymentsFactory: Amount must be greater than 0"
+        );
+        SafeERC20.safeTransfer(_token, msg.sender, _amount);
     }
 }
