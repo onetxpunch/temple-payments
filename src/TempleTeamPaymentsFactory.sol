@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "./TempleTeamPayments.sol";
+import "./TempleTeamPaymentsV2.sol";
 
 contract TempleTeamPaymentsFactory is Ownable {
     struct FundingData {
@@ -47,13 +47,13 @@ contract TempleTeamPaymentsFactory is Ownable {
         uint256[] calldata _allocations,
         uint256 _totalFunding,
         uint256 _startTimestamp
-    ) external onlyOwner returns (TempleTeamPayments) {
+    ) external onlyOwner returns (TempleTeamPaymentsV2) {
         require(
             _dests.length == _allocations.length,
             "TempleTeamPaymentsFactory: mismatch length dests + allos"
         );
 
-        TempleTeamPayments paymentContract = new TempleTeamPayments(
+        TempleTeamPaymentsV2 paymentContract = new TempleTeamPaymentsV2(
             _temple,
             _startTimestamp
         );

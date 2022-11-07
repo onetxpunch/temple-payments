@@ -39,7 +39,7 @@ contract TempleTeamPaymentsFactoryTest is Test {
         assertGt(temple.balanceOf(testUser), prev);
     }
 
-    function testDeployPayouts() public returns (TempleTeamPayments) {
+    function testDeployPayouts() public returns (TempleTeamPaymentsV2) {
         address[] memory recip = new address[](testAllocationLength);
         for (uint256 i; i < recip.length; i++) {
             recip[i] = testUser;
@@ -55,7 +55,7 @@ contract TempleTeamPaymentsFactoryTest is Test {
         vm.startPrank(multisig);
         temple.approve(address(factory), type(uint256).max);
 
-        TempleTeamPayments testContract = factory.deployPayouts(
+        TempleTeamPaymentsV2 testContract = factory.deployPayouts(
             temple,
             recip,
             values,
@@ -73,7 +73,7 @@ contract TempleTeamPaymentsFactoryTest is Test {
     }
 
     function testCanClaim() public {
-        TempleTeamPayments testContract = testDeployPayouts();
+        TempleTeamPaymentsV2 testContract = testDeployPayouts();
 
         vm.warp(block.timestamp + 3 days);
         vm.startPrank(testUser);
@@ -83,7 +83,7 @@ contract TempleTeamPaymentsFactoryTest is Test {
     }
 
     function testFailCannotClaimEarly() public {
-        TempleTeamPayments testContract = testDeployPayouts();
+        TempleTeamPaymentsV2 testContract = testDeployPayouts();
 
         vm.startPrank(testUser);
         uint256 prev = testContract.temple().balanceOf(testUser);
@@ -92,7 +92,7 @@ contract TempleTeamPaymentsFactoryTest is Test {
     }
 
     function testFailClaimTwice() public {
-        TempleTeamPayments testContract = testDeployPayouts();
+        TempleTeamPaymentsV2 testContract = testDeployPayouts();
 
         vm.startPrank(testUser);
         uint256 prev = testContract.temple().balanceOf(testUser);
@@ -106,7 +106,7 @@ contract TempleTeamPaymentsFactoryTest is Test {
     }
 
     function testFailPauseCannotClaim() public {
-        TempleTeamPayments testContract = testDeployPayouts();
+        TempleTeamPaymentsV2 testContract = testDeployPayouts();
         vm.stopPrank();
         vm.startPrank(multisig);
         testContract.toggleMember(testUser);
