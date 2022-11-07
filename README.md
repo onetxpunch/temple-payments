@@ -21,3 +21,7 @@ forge test -vvvv --fork-url https://rpc.ankr.com/eth
 ```sh
 forge create src/TempleTeamPaymentsFactory.sol:TempleTeamPaymentsFactory --rpc-url https://rpc.ankr.com/eth -i
 ```
+
+## references
+
+[protocol/contracts/admin/TempleTeamPayments.sol](https://github.com/TempleDAO/temple/blob/stage/protocol/contracts/admin/TempleTeamPayments.sol)

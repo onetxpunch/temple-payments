@@ -33,10 +33,18 @@ contract TempleTeamPaymentsFactory is Ownable {
         lastPaidEpoch = _lastPaidEpoch;
     }
 
+    /**
+     * @dev Deploys a new TempleTeamPayments contract, setAllocations to _dests and _allocations, funded with _totalFunding as _temple tokens, available to claim at _startTimestamp
+     * @param _temple the token to distribute
+     * @param _dests the recipient of the tokens
+     * @param _allocations the recipients respective amounts
+     * @param _totalFunding the total funding to supply the contract with initially
+     * @param _startTimestamp the time when recipients can make a claim
+     */
     function deployPayouts(
         IERC20 _temple,
-        address[] memory _dests,
-        uint256[] memory _allocations,
+        address[] calldata _dests,
+        uint256[] calldata _allocations,
         uint256 _totalFunding,
         uint256 _startTimestamp
     ) external onlyOwner returns (TempleTeamPayments) {
@@ -75,10 +83,16 @@ contract TempleTeamPaymentsFactory is Ownable {
         return paymentContract;
     }
 
+    /**
+     * @dev Directly transfers _temple tokens to _dests and _allocations
+     * @param _temple the token to distribute
+     * @param _dests the recipient of the tokens
+     * @param _allocations the recipients respective amounts
+     */
     function directPayouts(
         IERC20 _temple,
-        address[] memory _dests,
-        uint256[] memory _allocations
+        address[] calldata _dests,
+        uint256[] calldata _allocations
     ) external onlyOwner {
         require(
             _dests.length == _allocations.length,
