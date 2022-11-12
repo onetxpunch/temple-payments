@@ -1,5 +1,7 @@
 {
   "devDependencies": {
+    "@openzeppelin/contracts": "^4.8.0",
+    "@openzeppelin/contracts-upgradeable": "^4.8.0",
     "prettier": "^2.7.1",
     "prettier-plugin-solidity": "^1.0.0-rc.1",
     "solhint": "^3.3.7",
