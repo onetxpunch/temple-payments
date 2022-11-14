@@ -19,25 +19,26 @@ contract TempleTeamPaymentsFactoryTest is Test {
     }
 
     function testDirectPayoutsAssertions(uint256 _length) internal {
-        uint256 prev = temple.balanceOf(testUser);
-
+        uint256[] memory previousBalances = new uint256[](_length);
         address[] memory recip = new address[](_length);
+        uint256[] memory values = new uint256[](_length);
         for (uint256 i; i < recip.length; i++) {
-            recip[i] = vm.addr(i + 1);
+            address test = vm.addr(i + 1);
+            recip[i] = test;
+            uint256 testAmount = (i + 1) * 1 ether;
+            values[i] = testAmount;
+            previousBalances[i] = temple.balanceOf(test);
         }
 
-        uint256[] memory values = new uint256[](_length);
-        for (uint256 i; i < values.length; i++) {
-            values[i] = (i + 1) * 1 ether;
-        }
         vm.startPrank(multisig);
         temple.approve(address(factory), type(uint256).max);
         factory.directPayouts(temple, recip, values);
         vm.stopPrank();
+
         for (uint256 i; i < recip.length; i++) {
             address tester = vm.addr(i + 1);
             uint256 currentBalance = temple.balanceOf(tester);
-            assertEq(currentBalance, prev + values[i]);
+            assertEq(currentBalance, previousBalances[i] + values[i]);
         }
     }
 
@@ -51,26 +52,23 @@ contract TempleTeamPaymentsFactoryTest is Test {
         testDirectPayoutsAssertions(lengthOfUsers);
     }
 
-    function testDeployPayoutsParams(
+    function testDeployPayoutsAssertions(
         uint40 _claimStartTimestamp,
-        uint256 _funding,
         uint256 _userTestLength
     ) internal returns (TempleTeamPaymentsV2) {
         address[] memory recip = new address[](_userTestLength);
-        for (uint256 i; i < recip.length; i++) {
-            recip[i] = testUser;
-        }
-
         uint256[] memory values = new uint256[](_userTestLength);
         uint256 totalPaid;
-        for (uint256 i; i < values.length; i++) {
+        for (uint256 i; i < recip.length; i++) {
+            address test = vm.addr(i + 1);
+            recip[i] = test;
             uint256 testAmount = (i + 1) * 1 ether;
             values[i] = testAmount;
             totalPaid += testAmount;
         }
+
         vm.startPrank(multisig);
         temple.approve(address(factory), type(uint256).max);
-
         TempleTeamPaymentsV2 testContract = factory.deployPayouts(
             temple,
             recip,
@@ -79,25 +77,23 @@ contract TempleTeamPaymentsFactoryTest is Test {
             _claimStartTimestamp
         );
         vm.stopPrank();
+
+        for (uint256 i; i < recip.length; i++) {
+            address tester = vm.addr(i + 1);
+            uint256 currentBalance = testContract.allocation(tester);
+            assertEq(currentBalance, values[i]);
+        }
+
         return testContract;
     }
 
     function testDeployPayoutsSingle() public returns (TempleTeamPaymentsV2) {
-        return
-            testDeployPayoutsParams(
-                uint40(block.timestamp + 1 days),
-                1 ether,
-                1
-            );
+        return testDeployPayoutsAssertions(uint40(block.timestamp + 1 days), 1);
     }
 
     function testDeployPayoutsMany() public returns (TempleTeamPaymentsV2) {
         return
-            testDeployPayoutsParams(
-                uint40(block.timestamp + 1 days),
-                1 ether,
-                50
-            );
+            testDeployPayoutsAssertions(uint40(block.timestamp + 1 days), 50);
     }
 
     function testRoundIncrementsDirectPayout() public {
@@ -114,12 +110,14 @@ contract TempleTeamPaymentsFactoryTest is Test {
 
     function testCanClaimAllocation() public {
         TempleTeamPaymentsV2 testContract = testDeployPayoutsSingle();
-        uint256 canClaimAfter = testContract.claimOpenTimestamp();
 
+        uint256 canClaimAfter = testContract.claimOpenTimestamp();
         vm.warp(canClaimAfter);
+
         uint256 prev = testContract.temple().balanceOf(testUser);
-        vm.startPrank(testUser);
+        vm.prank(testUser);
         testContract.claim();
+
         assertEq(
             testContract.temple().balanceOf(testUser),
             prev + testContract.allocation(testUser)
@@ -177,8 +175,8 @@ contract TempleTeamPaymentsFactoryTest is Test {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = 1 ether;
 
-        vm.prank(testContract.owner());
         vm.expectRevert();
+        vm.prank(multisig);
         testContract.setAllocations(addrs, amounts);
     }
 }
