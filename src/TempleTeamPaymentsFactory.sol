@@ -11,11 +11,12 @@ contract TempleTeamPaymentsFactory is Ownable {
     struct FundingData {
         address paymentContract;
         uint256 totalFunding;
-        uint256 epoch;
+        uint16 epoch;
     }
 
     address public templeTeamPaymentsImplementation;
-    uint256 public lastPaidEpoch;
+    uint16 public initialEpoch;
+    uint16 public lastPaidEpoch;
     mapping(uint256 => FundingData) public epochsFunded;
 
     event FundingPaid(
@@ -32,9 +33,10 @@ contract TempleTeamPaymentsFactory is Ownable {
         address deployedTo
     );
 
-    constructor(uint256 _lastPaidEpoch) {
+    constructor(uint16 _lastPaidEpoch) {
         templeTeamPaymentsImplementation = address(new TempleTeamPaymentsV2());
         lastPaidEpoch = _lastPaidEpoch;
+        initialEpoch = _lastPaidEpoch + 1;
     }
 
     function incrementEpoch(
@@ -47,6 +49,11 @@ contract TempleTeamPaymentsFactory is Ownable {
             totalFunding: _totalFunding,
             epoch: lastPaidEpoch
         });
+    }
+
+    function withdrawToken(IERC20 _token, uint256 _amount) external onlyOwner {
+        if (_amount == 0) revert ClaimZeroValue();
+        SafeERC20.safeTransfer(_token, msg.sender, _amount);
     }
 
     /**
@@ -62,25 +69,25 @@ contract TempleTeamPaymentsFactory is Ownable {
         address[] calldata _dests,
         uint256[] calldata _allocations,
         uint256 _totalFunding,
-        uint256 _startTimestamp
+        uint40 _startTimestamp
     ) external onlyOwner returns (TempleTeamPaymentsV2) {
-        bytes32 salt = keccak256(abi.encodePacked(_temple, lastPaidEpoch));
+        bytes32 salt = keccak256(abi.encodePacked(_temple, lastPaidEpoch + 1));
         TempleTeamPaymentsV2 paymentContract = TempleTeamPaymentsV2(
             Clones.cloneDeterministic(templeTeamPaymentsImplementation, salt)
         );
-        paymentContract.initialize();
-        paymentContract.setPaymentToken(_temple);
+        paymentContract.initialize(_temple);
         paymentContract.setClaimOpenTimestamp(_startTimestamp);
         paymentContract.setAllocations(_dests, _allocations);
 
         paymentContract.transferOwnership(msg.sender);
 
-        SafeERC20.safeTransferFrom(
-            _temple,
-            msg.sender,
-            address(paymentContract),
-            _totalFunding
-        );
+        if (_totalFunding > 0)
+            SafeERC20.safeTransferFrom(
+                _temple,
+                msg.sender,
+                address(paymentContract),
+                _totalFunding
+            );
 
         incrementEpoch(address(paymentContract), _totalFunding);
 
@@ -110,22 +117,20 @@ contract TempleTeamPaymentsFactory is Ownable {
             revert AllocationsLengthMismatch();
 
         uint256 totalFunding;
-        for (uint256 i; i < _dests.length; i++) {
+        for (uint256 i; i < _dests.length; ) {
             address dest = _dests[i];
             if (dest == address(0)) revert AllocationAddressZero();
             uint256 value = _allocations[i];
             if (value < 0) revert ClaimZeroValue();
             SafeERC20.safeTransferFrom(_temple, msg.sender, _dests[i], value);
             totalFunding += value;
+            unchecked {
+                i++;
+            }
         }
 
         incrementEpoch(address(this), totalFunding);
 
         emit FundingPaid(address(_temple), lastPaidEpoch, _dests, _allocations);
-    }
-
-    function withdrawToken(IERC20 _token, uint256 _amount) external onlyOwner {
-        if (_amount == 0) revert ClaimZeroValue();
-        SafeERC20.safeTransfer(_token, msg.sender, _amount);
     }
 }
