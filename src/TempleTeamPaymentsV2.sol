@@ -27,15 +27,16 @@ contract TempleTeamPaymentsV2 is Initializable, OwnableUpgradeable {
         temple = _temple;
     }
 
-    function withdrawToken(IERC20 _token, uint256 _amount) external onlyOwner {
-        if (_amount == 0) revert ClaimZeroValue();
-        SafeERC20.safeTransfer(_token, msg.sender, _amount);
+    function _setAllocation(address _address, uint256 _amount) internal {
+        if (_address == address(0)) revert AllocationAddressZero();
+        allocation[_address] = _amount;
     }
 
-    function setClaimOpenTimestamp(
-        uint40 _claimOpenTimestamp
+    function setAllocation(
+        address _address,
+        uint256 _amount
     ) external onlyOwner {
-        claimOpenTimestamp = _claimOpenTimestamp;
+        _setAllocation(_address, _amount);
     }
 
     function setAllocations(
@@ -46,8 +47,7 @@ contract TempleTeamPaymentsV2 is Initializable, OwnableUpgradeable {
             revert AllocationsLengthMismatch();
 
         for (uint256 i = 0; i < _addresses.length; ) {
-            if (_addresses[i] == address(0)) revert AllocationAddressZero();
-            allocation[_addresses[i]] = _amounts[i];
+            _setAllocation(_addresses[i], _amounts[i]);
 
             unchecked {
                 i++;
@@ -55,12 +55,15 @@ contract TempleTeamPaymentsV2 is Initializable, OwnableUpgradeable {
         }
     }
 
-    function setAllocation(
-        address _address,
-        uint256 _amount
+    function withdrawToken(IERC20 _token, uint256 _amount) external onlyOwner {
+        if (_amount == 0) revert ClaimZeroValue();
+        SafeERC20.safeTransfer(_token, msg.sender, _amount);
+    }
+
+    function setClaimOpenTimestamp(
+        uint40 _claimOpenTimestamp
     ) external onlyOwner {
-        if (_address == address(0)) revert AllocationAddressZero();
-        allocation[_address] = _amount;
+        claimOpenTimestamp = _claimOpenTimestamp;
     }
 
     function toggleMember(address _address) external onlyOwner {
